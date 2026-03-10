@@ -33,6 +33,12 @@
 #include <faiss/impl/pq_code_distance/pq_code_distance-inl.h>
 #include <faiss/impl/simd_dispatch.h>
 
+#ifdef __aarch64__
+extern "C" {
+#include <faiss/sra_krl/include/krl.h>
+}
+#endif
+
 namespace faiss {
 
 /*****************************************
@@ -1229,7 +1235,46 @@ struct IVFPQScanner : IVFPQScannerT<idx_t, METRIC_TYPE, PQCodeDist>,
             assert(precompute_mode == 2);
             this->scan_list_polysemous(ncode, codes, res);
         } else if (precompute_mode == 2) {
+#ifdef __aarch64__
+            if (this->pq.nbits == 8 && this->klh) {
+				if constexpr (use_sel) {
+                    size_t j = 0;
+                    size_t* idx_tmp_buffer = krl_get_idx_pointer(klh);
+                    float* distance_tmp_buffer = krl_get_dist_pointer(klh);
+                    for(size_t i = 0; i < ncode; ++i) {
+                        if(this->sel->is_member(ids[i])){
+                            idx_tmp_buffer[j++] = i;
+                        }
+                    }
+                    ncode = j;
+                    krl_table_lookup_8b_f32_by_idx(
+                        this->pq.M, ncode, codes, this->sim_table, distance_tmp_buffer, this->dis0, idx_tmp_buffer, 
+						this->pq.M * ncode, this->pq.M * 256, ncode);
+                    for(size_t i = 0; i < ncode; ++i) {
+                        res.add(idx_tmp_buffer[i],distance_tmp_buffer[i]);
+                    }
+                } else {
+					float* distance_tmp_buffer = krl_get_dist_pointer(klh);
+					krl_table_lookup_8b_f32(
+						this->pq.M, ncode, codes, this->sim_table, distance_tmp_buffer, this->dis0, this->pq.M * ncode, 
+						this->pq.M * 256, ncode);
+					size_t i = 0;
+					for(; i + 4 <= ncode; i+=4) {
+						res.add(i, distance_tmp_buffer[i]);
+						res.add(i + 1, distance_tmp_buffer[i + 1]);
+						res.add(i + 2, distance_tmp_buffer[i + 2]);
+						res.add(i + 3, distance_tmp_buffer[i + 3]);
+					}
+					for(; i < ncode; ++i) {
+						res.add(i, distance_tmp_buffer[i]);
+					}
+                }
+            } else {
+				this->scan_list_with_table(ncode, codes, res);
+            }
+#else 
             this->scan_list_with_table(ncode, codes, res);
+#endif
         } else if (precompute_mode == 1) {
             this->scan_list_with_pointer(ncode, codes, res);
         } else if (precompute_mode == 0) {

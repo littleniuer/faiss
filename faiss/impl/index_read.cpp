@@ -76,6 +76,12 @@
 #include <faiss/impl/mapped_io.h>
 #include <faiss/impl/zerocopy_io.h>
 
+#ifdef __aarch64__
+extern "C" {
+#include <faiss/sra_krl/include/krl.h>
+}
+#endif 
+
 namespace faiss {
 
 /*************************************************************
@@ -466,6 +472,10 @@ void read_ProductQuantizer(ProductQuantizer* pq, IOReader* f) {
             pq->M > 0, "invalid ProductQuantizer M=%zd (must be > 0)", pq->M);
     pq->set_derived_values();
     READVECTOR(pq->centroids);
+#ifdef __aarch64__
+    pq->kdh = nullptr;
+    pq->use_transpose = false;
+#endif
 }
 
 static void read_ResidualQuantizer_old(ResidualQuantizer& rq, IOReader* f) {
@@ -918,6 +928,10 @@ static std::unique_ptr<IndexIVFPQ> read_ivfpq(
             READ1(ivfpqr->k_factor);
         }
     }
+#ifdef __aarch64__
+    ivpq->tmp_buffer_size = ivpq->invlists->initialize_tmp_buffer(64);
+    ivpq->pq.initialize_krl_transpose_centroids(64, ivpq->metric_type);
+#endif
     return ivpq;
 }
 

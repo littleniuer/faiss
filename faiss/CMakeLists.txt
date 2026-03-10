@@ -335,6 +335,45 @@ if(FAISS_ENABLE_SVS)
   )
 endif()
 
+# -------------------- ARM aarch64 sra_krl sources --------------------
+# On aarch64, add sra_krl sources. Source code uses #ifdef __aarch64__.
+#
+# These .c files contain C++ features (template, constexpr, #include <cstring>)
+# so they MUST be compiled as C++. The public API headers (krl.h) already wrap
+# function declarations with extern "C" { }, ensuring C linkage for symbols.
+set(KRL_SRC)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
+  message(STATUS "ARM aarch64 detected: adding sra_krl sources")
+
+  set(KRL_SRC
+    sra_krl/src/IPdistance_simd_f16f32.c
+    sra_krl/src/IPdistance_simd.c
+    sra_krl/src/IPdistance_simd_s8.c
+    sra_krl/src/krl_handles.c
+    sra_krl/src/L2distance_simd_f16f32.c
+    sra_krl/src/L2distance_simd.c
+    sra_krl/src/L2distance_simd_u8.c
+    sra_krl/src/matrix_block_transpose.c
+    sra_krl/src/MinMax_quant.c
+    sra_krl/src/pq_search_with_table_8bit.c
+  )
+
+
+  # Force C++ compilation: these .c files use template, constexpr, <cstring>
+  set_source_files_properties(${KRL_SRC} PROPERTIES LANGUAGE CXX)
+
+  set(KRL_COMPILE_FLAGS "-march=armv8.2-a+fp16+fp16fml+dotprod+sve+rcpc")
+
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    set_source_files_properties(${KRL_SRC} PROPERTIES
+      COMPILE_FLAGS "${KRL_COMPILE_FLAGS}"
+    )
+  endif()
+
+  # Add KRL sources to main FAISS_SRC
+  list(APPEND FAISS_SRC ${KRL_SRC})
+endif()
+
 if(NOT WIN32)
   list(APPEND FAISS_SRC invlists/OnDiskInvertedLists.cpp)
   list(APPEND FAISS_HEADERS invlists/OnDiskInvertedLists.h)
@@ -344,6 +383,14 @@ endif()
 set(FAISS_HEADERS ${FAISS_HEADERS} PARENT_SCOPE)
 
 add_library(faiss ${FAISS_SRC})
+
+# -------------------- aarch64 sra_krl include dirs for faiss --------------------
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
+  target_include_directories(faiss PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/sra_krl/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/faiss/sra_krl>
+  )
+endif()
 
 add_library(faiss_avx2 ${FAISS_SRC})
 if(NOT FAISS_OPT_LEVEL STREQUAL "avx2" AND NOT FAISS_OPT_LEVEL STREQUAL "avx512" AND NOT FAISS_OPT_LEVEL STREQUAL "avx512_spr")
@@ -421,6 +468,14 @@ if(NOT WIN32)
 endif()
 target_sources(faiss_sve PRIVATE ${FAISS_SIMD_NEON_SRC} ${FAISS_SIMD_SVE_SRC})
 target_compile_definitions(faiss_sve PRIVATE COMPILE_SIMD_ARM_NEON COMPILE_SIMD_ARM_SVE)
+
+# -------------------- aarch64 sra_krl include dirs for faiss_sve --------------------
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
+  target_include_directories(faiss_sve PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/sra_krl/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/faiss/sra_krl>
+  )
+endif()
 
 # =============================================================================
 # Dynamic Dispatch Mode
@@ -615,6 +670,13 @@ if(FAISS_OPT_LEVEL STREQUAL "sve")
 endif()
 # Note: FAISS_OPT_LEVEL=dd builds DD support into main faiss target,
 # so no separate faiss_dd install is needed
+
+# -------------------- Install KRL headers (aarch64 only) --------------------
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
+  install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sra_krl/include/
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/faiss/sra_krl/include
+          FILES_MATCHING PATTERN "*.h")
+endif()
 
 foreach(header ${FAISS_HEADERS})
   get_filename_component(dir ${header} DIRECTORY )

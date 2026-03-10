@@ -134,6 +134,10 @@ struct InvertedLists {
 
     virtual void reset();
 
+#ifdef __aarch64__
+    virtual size_t initialize_tmp_buffer(size_t batchsize);
+#endif
+
     /*************************
      * high level functions  */
 
@@ -275,6 +279,10 @@ struct ArrayInvertedLists : InvertedLists {
             const override;
 
     ~ArrayInvertedLists() override;
+
+#ifdef __aarch64__
+    size_t initialize_tmp_buffer(size_t batchsize) override;
+#endif
 };
 
 /// Level-oriented storage as defined in the IVFFlat section of Panorama

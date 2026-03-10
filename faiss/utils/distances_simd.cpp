@@ -26,6 +26,12 @@
 // NOLINTNEXTLINE(facebook-hte-InlineHeader)
 #include <faiss/utils/simd_impl/distances_simdlib256.h>
 
+#ifdef __aarch64__
+extern "C" {
+#include <faiss/sra_krl/include/krl.h>
+}
+#endif
+
 namespace faiss {
 
 /*******
@@ -85,6 +91,10 @@ void fvec_inner_products_ny<SIMDLevel::NONE>(
     sgemv_ ("T", &di, &nyi, &one, y, &di, x, &onei, &zero, ip, &onei);
 }
 #endif
+#ifdef __aarch64__
+    krl_inner_product_ny(ip, x, y, ny, d, ny);
+    return;
+#endif
     for (size_t i = 0; i < ny; i++) {
         ip[i] = fvec_inner_product(x, y, d);
         y += d;
@@ -98,6 +108,10 @@ void fvec_L2sqr_ny<SIMDLevel::NONE>(
         const float* y,
         size_t d,
         size_t ny) {
+#ifdef __aarch64__
+    krl_L2sqr_ny(dis, x, y, ny, d, ny);
+    return;
+#endif
     for (size_t i = 0; i < ny; i++) {
         dis[i] = fvec_L2sqr(x, y, d);
         y += d;

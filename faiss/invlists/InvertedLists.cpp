@@ -68,6 +68,12 @@ void InvertedLists::reset() {
     }
 }
 
+#ifdef __aarch64__
+size_t InvertedLists::initialize_tmp_buffer(size_t batchsize) {
+    return 0;
+}
+#endif
+
 void InvertedLists::merge_from(InvertedLists* oivf, size_t add_id) {
 #pragma omp parallel for
     for (idx_t i = 0; i < nlist; i++) {
@@ -459,6 +465,18 @@ InvertedListsIterator* ArrayInvertedListsPanorama::get_iterator(
             "IndexIVFFlatPanorama does not support iterators, use vanilla IndexIVFFlat instead");
     return nullptr;
 }
+
+#ifdef __aarch64__
+size_t ArrayInvertedLists::initialize_tmp_buffer(size_t batchsize) {
+    size_t tmp_buffer_size = 0;
+    for(int i = 0; i < nlist; ++i) {
+        size_t n = ids[i].size();
+        tmp_buffer_size = (n > tmp_buffer_size) ? n : tmp_buffer_size; 
+    }
+    tmp_buffer_size = ((tmp_buffer_size + batchsize - 1) & (-batchsize));
+    return tmp_buffer_size;
+}
+#endif
 
 /*****************************************************************
  * Meta-inverted list implementations

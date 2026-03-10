@@ -28,6 +28,12 @@
 #include <faiss/impl/ResultHandler.h>
 #include <faiss/impl/expanded_scanners.h>
 
+#ifdef __aarch64__
+extern "C" {
+#include <faiss/sra_krl/include/krl.h>
+}
+#endif
+
 namespace faiss {
 
 using ScopedIds = InvertedLists::ScopedIds;
@@ -464,6 +470,9 @@ void IndexIVF::search_preassigned(
         std::unique_ptr<InvertedListScanner> scanner(
                 get_InvertedListScanner(store_pairs, sel, params));
 
+#ifdef __aarch64__
+        krl_create_LUT8b_handle(&(scanner->klh),(int)(sel != nullptr), tmp_buffer_size);
+#endif
         /*****************************************************
          * Depending on parallel_mode, there are two possible ways
          * to organize the search. Here we define local functions

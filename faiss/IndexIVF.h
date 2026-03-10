@@ -20,6 +20,14 @@
 #include <faiss/invlists/InvertedLists.h>
 #include <faiss/utils/Heap.h>
 
+#ifdef __aarch64__
+extern "C" {
+    typedef struct KRLLookupTable8bitHandle KRLLUT8bHandle;
+    void krl_clean_LUT8b_handle(KRLLUT8bHandle** klh);
+}
+#endif
+
+
 namespace faiss {
 
 /** Encapsulates a quantizer object for the IndexIVF
@@ -197,6 +205,10 @@ struct IndexIVF : Index, IndexIVFInterface {
     /// do the codes in the invlists encode the vectors relative to the
     /// centroids?
     bool by_residual = true;
+
+#ifdef __aarch64__
+    size_t tmp_buffer_size = 0;
+#endif
 
     /** The Inverted file takes a quantizer (an Index) on input,
      * which implements the function mapping a vector to a list
@@ -553,7 +565,17 @@ struct InvertedListScanner {
             const idx_t* ids,
             ResultHandler& handler) const;
 
+#ifdef __aarch64__
+    KRLLUT8bHandle* klh = nullptr;
+    virtual ~InvertedListScanner() {
+        if(klh){
+            krl_clean_LUT8b_handle(&klh);
+            klh = nullptr;
+        }
+    }
+#else
     virtual ~InvertedListScanner() {}
+#endif
 };
 
 // whether to check that coarse quantizers are the same
