@@ -91,6 +91,9 @@ void Level1Quantizer::train_q1(
         } else {
             clus.train(n, x, *quantizer);
         }
+#ifdef __aarch64__
+		quantizer->train(-1, x);
+#endif
         quantizer->is_trained = true;
     } else if (quantizer_trains_alone == 2) {
         if (verbose) {
@@ -471,7 +474,9 @@ void IndexIVF::search_preassigned(
                 get_InvertedListScanner(store_pairs, sel, params));
 
 #ifdef __aarch64__
-        krl_create_LUT8b_handle(&(scanner->klh),(int)(sel != nullptr), tmp_buffer_size);
+		if (tmp_buffer_size > 0) {
+        	krl_create_LUT8b_handle(&(scanner->klh),(int)(sel != nullptr), tmp_buffer_size);
+		}
 #endif
         /*****************************************************
          * Depending on parallel_mode, there are two possible ways
